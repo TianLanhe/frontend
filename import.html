@@ -1,0 +1,59 @@
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>
+        批量导入数据
+    </title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="" name="description" />
+    <meta content="" name="author" />
+</head>
+<body class="page-header-fixed" style="">
+<div class="page-sidebar nav-collapse collapse">
+    <!-- BEGIN SIDEBAR MENU -->
+    <input type="hidden" id="area" value="admin" />
+    <input type="hidden" id="controller" value="exp" />
+    <input type="hidden" id="action" value="index" />
+    <ul class="page-sidebar-menu">
+        <li class="active"> <a href="javascript:;"> <i class="icon-user"> </i> <span class="title"> 数据库管理 </span> <span class="selected"> </span> </a>
+            <ul class="sub-menu">
+                <li class="active"> <a href="/index.html"> 数据列表 </a> </li>
+                <li class=""> <a href="/import.html"> 导入数据库 </a> </li>
+                <li class=""> <a href="/match.html"> 匹配数据 </a> </li>
+            </ul> </li>
+    </ul>
+</div>
+<div class="page-content">
+    <h1>批量上传数据</h1>
+    <form action="/api/import/" onsubmit="return validateForm()" method="post" name="actionForm" enctype="multipart/form-data">
+        <div class="control-group">
+            <label class="col-md-4 control-label required-field" for="upload_import"> 上传Excel文档（表1） </label>
+            <div class="col-md-4">
+                <input type="file" name="upload_import" id="upload_import" accept="application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+            </div>
+            <div style="margin-top:10px;">
+                <label class="col-md-4 control-label required-field" for="upload_import_2"> 上传Excel文档（表2） </label>
+                <div class="col-md-4">
+                    <input type="file" name="upload_import_2" id="upload_import_2" accept="application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:10px;">
+            <button type="submit" class="btn green"> 提交 </button>
+            <button type="button" onclick="window.history.back(-1);" class="btn  default"> 返回 </button>
+        </div>
+        <p> 提示：只上传一个文档默认原样上传，上传两个文档则根据「订单号」合并成一个</p>
+    </form>
+</div>
+<script>
+    function validateForm() {
+        var filePath = document.forms["actionForm"]["upload_import"].value;
+        var filePath2 = document.forms["actionForm"]["upload_import_2"].value;
+        if ((!filePath || filePath == "") && (!filePath2 || filePath2 == "")) {
+            alert("请至少选择一个Excel文件！");
+            return false;
+        }
+    }
+</script>
+</body>
+</html>

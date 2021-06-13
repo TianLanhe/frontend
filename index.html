@@ -1,0 +1,91 @@
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>
+        数据库管理
+    </title>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="" name="description" />
+    <meta content="" name="author" />
+</head>
+<body class="page-header-fixed" style="">
+<div class="page-container row-fluid">
+    <div class="page-sidebar nav-collapse collapse">
+        <!-- BEGIN SIDEBAR MENU -->
+        <input type="hidden" id="area" value="admin" />
+        <input type="hidden" id="controller" value="exp" />
+        <input type="hidden" id="action" value="index" />
+        <ul class="page-sidebar-menu">
+            <li class="active"> <a href="javascript:;"> <i class="icon-user"> </i> <span class="title"> 数据库管理 </span> </a>
+                <ul class="sub-menu">
+                    <li class="active"> <a href="/index.html"> 数据列表 </a> </li>
+                    <li class=""> <a href="/import.html"> 导入数据库 </a> </li>
+                    <li class=""> <a href="/match.html"> 匹配数据 </a> </li>
+                </ul> </li>
+        </ul>
+    </div>
+    <div class="page-content">
+        <div class="container-fluid">
+            <div class="row-fluid">
+                <div class="span12">
+                    <!-- BEGIN TABLE PORTLET-->
+                    <div class="portlet box yellow tabbable">
+                        <div class="portlet-title">
+                            <h1>数据列表</h1>
+                        </div>
+                        {{ $headerSize := len .Headers }}
+                        {{if eq $headerSize 0}}
+                            <h3> 请先上传数据导入数据库 </h3>
+                        {{else}}
+                            <form action="/api/clear/" method="post" name="clearForm">
+                                <button type="submit"> 清空数据库 </button>
+                            </form>
+                            <form action="/index.html" method="post" name="searchForm">
+                                <input type="text" name="keyword" placeholder="请输入关键字" />
+                                <button type="submit"> 搜索 </button>
+                            </form>
+                        {{end}}
+                        <div class="portlet-body">
+                            <div class="tabbable portlet-tabs">
+                                <div class="tab-content">
+                                    <div class="dataTables_wrapper form-inline" role="grid">
+                                        <table border="1" cellspacing="1" cellpadding="4" align="center">
+                                            <thead>
+                                            {{if ne $headerSize 0}}
+                                                <tr>
+                                                    <th>序号</th>
+                                                    {{range .Headers}}
+                                                        <th>{{.}}</th>
+                                                    {{end}}
+                                                    <th>操作</th>
+                                                </tr>
+                                            {{end}}
+                                            </thead>
+                                            <tbody>
+                                            {{ $dataSize := len .Datas }}
+                                            {{if ne $dataSize 0}}
+                                                {{range $index, $data := .Datas}}
+                                                    <tr>
+                                                        <td>{{$index}}</td>
+                                                        {{range $index2, $cell := $data}}
+                                                            <td>{{$cell}}</td> {{end}}
+                                                        <td>
+                                                            <a href="/api/delete?id={{$index}}">删除</a>
+                                                        </td>
+                                                </tr>
+                                                {{end}}
+                                            {{end}}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
