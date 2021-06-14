@@ -31,7 +31,7 @@ var (
 		"linux":   "xdg-open",
 	}
 
-	MatchFields         = []string{"省", "市"}
+	MatchFields         = []string{"省", "市", "区"}
 	MergeField          = "订单.*号"
 	ExpressCompanyField = "快递名称"
 
@@ -425,6 +425,7 @@ func match(data TableStruct, match TableStruct, matchFields []string) (TableStru
 	ret.Headers = append(ret.Headers, data.Headers...)
 
 	usedMap := make(map[int]bool)
+	haveMathcedRow := make(map[int]bool)
 	for i, datas := range match.Datas {
 		for j, row := range data.Datas {
 			if usedMap[j] {
@@ -441,6 +442,38 @@ func match(data TableStruct, match TableStruct, matchFields []string) (TableStru
 			if match {
 				usedMap[j] = true
 				ret.Datas[i] = append(ret.Datas[i], row...)
+				haveMathcedRow[i] = true
+				break
+			}
+		}
+	}
+
+	if len(matchFields) == 1 {
+		return ret, nil
+	}
+
+	// search for second time to match remainder row, ignore the last match filed
+	matchIdx = matchIdx[:len(matchIdx)-1]
+	for i, datas := range match.Datas {
+		if haveMathcedRow[i] {
+			continue
+		}
+		for j, row := range data.Datas {
+			if usedMap[j] {
+				continue
+			}
+
+			match := true
+			for _, idx := range matchIdx {
+				if row[idx[0]] != datas[idx[1]] || row[idx[0]] == "" {
+					match = false
+					break
+				}
+			}
+			if match {
+				usedMap[j] = true
+				ret.Datas[i] = append(ret.Datas[i], row...)
+				haveMathcedRow[i] = true
 				break
 			}
 		}
