@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,11 +31,14 @@ var (
 		"linux":   "xdg-open",
 	}
 
-	MatchFields = []string{"省", "市"}
-	MergeField  = "订单.*号"
+	MatchFields         = []string{"省", "市"}
+	MergeField          = "订单.*号"
+	ExpressCompanyField = "快递名称"
 
 	mutex     sync.Mutex
 	tableData TableStruct
+
+	hintResponseTemplate = `<html><body><h1>%v</h1><button type="button" onclick="window.history.back(-1);" class="btn  default">返回</button></body></html>`
 )
 
 const (
@@ -41,6 +46,28 @@ const (
 	port         = 18888
 	dataFileName = "data.xlsx"
 )
+
+func getExpressCompany(td TableStruct) []string {
+	m := make(map[string]bool)
+	idx := -1
+	for i, header := range td.Headers {
+		if header == ExpressCompanyField {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return nil
+	}
+	for _, data := range td.Datas {
+		m[data[idx]] = true
+	}
+	ret := make([]string, 0, len(m))
+	for key := range m {
+		ret = append(ret, key)
+	}
+	return ret
+}
 
 // opens the specified URL in the default browser of the user.
 func open(uri string) error {
@@ -90,7 +117,7 @@ func IndexHandler(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	t, err := template.ParseFiles(path)
+	t, err := template.New(path).Funcs(template.FuncMap{"getExpressCompany": getExpressCompany}).ParseFiles(path)
 	if err != nil {
 		writer.Write([]byte(err.Error()))
 		return
@@ -160,8 +187,8 @@ func ImportHandler(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var td TableStruct
 	if data1 != nil && data2 != nil {
+		var td TableStruct
 		td1, err := Byte2TableStruct(data1)
 		if err != nil {
 			writer.Write([]byte(err.Error()))
@@ -250,7 +277,9 @@ func MatchHandler(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	handleMatch(writer, req, data)
+	expressCompany := req.FormValue("expressComp")
+
+	handleMatch(writer, req, data, expressCompany)
 }
 
 func ClearHandler(writer http.ResponseWriter, req *http.Request) {
@@ -278,39 +307,42 @@ func DeleteHandler(writer http.ResponseWriter, req *http.Request) {
 	}()
 
 	req.ParseForm()
-	idStr := req.FormValue("id")
+	idStrArr := req.Form["id"]
 
-	fmt.Printf("Delete ID: %v\n", idStr)
-
-	var id int64
-	var err error
-	if idStr != "" {
-		id, err = strconv.ParseInt(idStr, 10, 64)
+	var ids []int
+	for _, ele := range idStrArr {
+		id, err := strconv.ParseInt(ele, 10, 64)
 		if err != nil {
+			fmt.Printf("strconv int failed. err:%v, ele:%v\n", err, ele)
 			return
 		}
+		ids = append(ids, int(id))
 	}
+
+	sort.Ints(ids)
 
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	if id >= int64(len(tableData.Datas)) {
-		return
+	for i := len(ids) - 1; i >= 0; i-- {
+		id := ids[i]
+		if id >= len(tableData.Datas) {
+			continue
+		}
+		tableData.Datas = append(tableData.Datas[:id], tableData.Datas[id+1:]...)
 	}
 
-	tableData.Datas = append(tableData.Datas[:id], tableData.Datas[id+1:]...)
 	TableStruct2File(tableData, dataFileName) // ignore error
 }
 
-func handleMatch(writer http.ResponseWriter, req *http.Request, data []byte) {
+func handleMatch(writer http.ResponseWriter, req *http.Request, data []byte, express string) {
 	mutex.Lock()
 	tmpData := tableData
 	mutex.Unlock()
 
 	if len(tmpData.Headers) == 0 || len(tmpData.Datas) == 0 {
-		writer.Write([]byte(`<html><body><h1>请先上传数据</h1><button type="button" onclick="window.history.back(-1);" class="btn  default">
-                    返回
-                </button></body></html>`))
+		hint := fmt.Sprintf(hintResponseTemplate, "请先上传数据")
+		writer.Write([]byte(hint))
 		return
 	}
 
@@ -322,7 +354,7 @@ func handleMatch(writer http.ResponseWriter, req *http.Request, data []byte) {
 	}
 
 	// match the input excel file with the imported data, and return the matched part data
-	td, err = match(tmpData, td, MatchFields)
+	td, err = match(filterExpressCompany(tmpData, express), td, MatchFields)
 	if err != nil {
 		writer.Write([]byte(err.Error()))
 		return
@@ -334,6 +366,31 @@ func handleMatch(writer http.ResponseWriter, req *http.Request, data []byte) {
 	writer.Header().Set("Content-Type", "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", "匹配数据"+time.Now().Format("20060102150405")+".xlsx"))
 	Excel2Writer(xlsxFile, writer)
+}
+
+func filterExpressCompany(data TableStruct, express string) TableStruct {
+	if express == "" {
+		return data
+	}
+
+	var ret TableStruct
+	ret.Headers = data.Headers
+	idx := -1
+	for i, h := range ret.Headers {
+		if h == ExpressCompanyField {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return data
+	}
+	for _, d := range data.Datas {
+		if d[idx] == express {
+			ret.Datas = append(ret.Datas, d)
+		}
+	}
+	return ret
 }
 
 func match(data TableStruct, match TableStruct, matchFields []string) (TableStruct, error) {
@@ -400,6 +457,24 @@ func handleImport(writer http.ResponseWriter, req *http.Request, data []byte) {
 		return
 	}
 
+	// filter NULL or empty row
+	size := 0
+	for i := 0; i < len(td.Datas); i++ {
+		notEmpty := true
+		for j := 0; j < len(td.Datas[i]); j++ {
+			str := strings.TrimSpace(td.Datas[i][j])
+			if str == "" || strings.ToLower(str) == "null" {
+				notEmpty = false
+				break
+			}
+		}
+		if notEmpty {
+			td.Datas[size] = td.Datas[i]
+			size++
+		}
+	}
+	td.Datas = td.Datas[:size]
+
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -415,9 +490,8 @@ func handleImport(writer http.ResponseWriter, req *http.Request, data []byte) {
 		// compare the table header with the imported data, we only append the imported data to the
 		// current data if the table header is the same
 		if !SliceEqual(tableData.Headers, td.Headers) {
-			writer.Write([]byte(`<html><body><h1>表头不匹配，请先清空数据库或上传相同表头的数据</h1><button type="button" onclick="window.history.back(-1);" class="btn  default">
-                    返回
-                </button></body></html>`))
+			respData := fmt.Sprintf(hintResponseTemplate, "表头不匹配，请先清空数据库或上传相同表头的数据")
+			writer.Write([]byte(respData))
 			return
 		}
 
@@ -441,11 +515,10 @@ func handleImport(writer http.ResponseWriter, req *http.Request, data []byte) {
 		return
 	}
 
-	writer.Write([]byte(`<html><body><h1>上传数据成功</h1><button type="button" onclick="window.history.back(-1);" class="btn  default">
-                    返回
-                </button></body></html>`))
+	writer.Write([]byte(fmt.Sprintf(hintResponseTemplate, "上传数据成功")))
 }
 
+// 调整 td 表头的顺序使其于 origin 的表头顺序相同
 func alignTableData(origin TableStruct, td TableStruct) (TableStruct, error) {
 	if len(origin.Headers) != len(td.Headers) {
 		return td, nil
@@ -461,9 +534,7 @@ func alignTableData(origin TableStruct, td TableStruct) (TableStruct, error) {
 			}
 		}
 		if alignIdxs[i] == -1 {
-			return td, errors.New(`<html><body><h1>表头不匹配，请先清空数据库或上传相同表头的数据</h1><button type="button" onclick="window.history.back(-1);" class="btn  default">
-                    返回
-                </button></body></html>`)
+			return td, fmt.Errorf(hintResponseTemplate, "表头不匹配，请先清空数据库或上传相同表头的数据")
 		}
 	}
 
@@ -494,19 +565,19 @@ func main() {
 
 	addr := localhost + ":" + strconv.FormatInt(port, 10)
 
-	//go func() {
-	//	for i := 0; i < 5; i++ {
-	//		tcpAddr, _ := net.ResolveTCPAddr("tcp", addr)
-	//		tcpConn, err := net.DialTCP("tcp", nil, tcpAddr)
-	//		if err != nil {
-	//			fmt.Printf("i:%v, err: %v\n", i, err)
-	//			continue
-	//		}
-	//		tcpConn.Close()
-	//		break
-	//	}
-	//	open("http://" + localhost + ":" + strconv.FormatInt(port, 10) + "/index.html")
-	//}()
+	go func() {
+		for i := 0; i < 5; i++ {
+			tcpAddr, _ := net.ResolveTCPAddr("tcp", addr)
+			tcpConn, err := net.DialTCP("tcp", nil, tcpAddr)
+			if err != nil {
+				fmt.Printf("i:%v, err: %v\n", i, err)
+				continue
+			}
+			tcpConn.Close()
+			break
+		}
+		open("http://" + localhost + ":" + strconv.FormatInt(port, 10) + "/index.html")
+	}()
 
 	http.ListenAndServe(addr, nil)
 }

@@ -7,6 +7,43 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <meta content="" name="description" />
     <meta content="" name="author" />
+    <script>
+        function selectAllClick(){
+            var checked = document.getElementById("selectAll").value;
+            console.log('button value: ', checked);
+            var checkson = document.getElementsByName("id");
+            if(checked === '全选'){
+                document.getElementById('selectAll').value = '全不选';
+                for(var i = 0; i < checkson.length ;i++){
+                    checkson[i].checked = true;
+                }
+            }else{
+                document.getElementById('selectAll').value = '全选';
+                for(var i = 0; i < checkson.length ;i++){
+                    checkson[i].checked = false;
+                }
+            }
+        }
+        function selectBlock(){
+            var start = document.getElementById("startInput").value;
+            var end = document.getElementById("endInput").value;
+            console.log('Block: [', start, ',', end, ']');
+            start = Number(start);
+            end = Number(end);
+            if(!Number.isInteger(start) || !Number.isInteger(end)) {
+                alert('请输入两个整数！');
+                return;
+            }
+            if(start > end) {
+                alert('区间开始值必须小于结束值！');
+                return;
+            }
+            var checkson = document.getElementsByName("id");
+            for(var i = start; i < checkson.length && i <= end ;i++){
+                checkson[i].checked = true;
+            }
+        }
+    </script>
 </head>
 <body class="page-header-fixed" style="">
 <div class="page-container row-fluid">
@@ -44,6 +81,13 @@
                                 <input type="text" name="keyword" placeholder="请输入关键字" />
                                 <button type="submit"> 搜索 </button>
                             </form>
+                        <form action="/api/delete" method="put" name="batchDeleteForm">
+                            <button type="submit"> 删除选中 </button>
+                            <div>
+                                <input type="text" id="startInput" placeholder="请输入开始勾选的序号" />
+                                <input type="text" id="endInput" placeholder="请输入结束勾选的序号" />
+                                <input type="button" id="blockSelect" onclick="selectBlock()" value="勾选"/>
+                            </div>
                         {{end}}
                         <div class="portlet-body">
                             <div class="tabbable portlet-tabs">
@@ -53,7 +97,10 @@
                                             <thead>
                                             {{if ne $headerSize 0}}
                                                 <tr>
-                                                    <th>序号</th>
+                                                    <th>
+                                                        <input type="button" id="selectAll" onclick="selectAllClick()" value="全选"/>
+                                                        序号
+                                                    </th>
                                                     {{range .Headers}}
                                                         <th>{{.}}</th>
                                                     {{end}}
@@ -66,7 +113,10 @@
                                             {{if ne $dataSize 0}}
                                                 {{range $index, $data := .Datas}}
                                                     <tr>
-                                                        <td>{{$index}}</td>
+                                                        <td>
+                                                            <input type="checkbox" name="id" value="{{$index}}">
+                                                            {{$index}}
+                                                        </td>
                                                         {{range $index2, $cell := $data}}
                                                             <td>{{$cell}}</td> {{end}}
                                                         <td>
@@ -81,6 +131,7 @@
                                 </div>
                             </div>
                         </div>
+                        </form>
                     </div>
                 </div>
             </div>

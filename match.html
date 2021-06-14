@@ -34,6 +34,16 @@
                     <input type="file" name="upload_import" id="upload_import" accept="application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
                 </div>
             </div>
+            <div>
+                请选择快递公司(不选择默认不限制):
+                <select name="expressComp">
+                    <option></option>
+                    {{$expressComp := getExpressCompany .}}
+                    {{range $index, $data := $expressComp}}
+                    <option>{{$data}}</option>
+                    {{end}}
+                </select>
+            </div>
             <div style="margin-top:10px;">
                 <button type="submit" class="btn green"> 提交 </button>
                 <button type="button" onclick="window.history.back(-1);" class="btn  default"> 返回 </button>
