@@ -33,7 +33,7 @@ var (
 
 	MatchFields         = []string{"省", "市", "区"}
 	MergeField          = "订单.*号"
-	ExpressCompanyField = "快递名称"
+	ExpressCompanyField = "快递[名称|公司]"
 	ExpressOrderIDField = "快递.*号"
 
 	mutex     sync.Mutex
@@ -52,7 +52,8 @@ func getExpressCompany(td TableStruct) []string {
 	m := make(map[string]bool)
 	idx := -1
 	for i, header := range td.Headers {
-		if header == ExpressCompanyField {
+		m, err := regexp.MatchString(ExpressCompanyField, header)
+		if err == nil && m {
 			idx = i
 			break
 		}
