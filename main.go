@@ -34,6 +34,7 @@ var (
 	MatchFields         = []string{"省", "市", "区"}
 	MergeField          = "订单.*号"
 	ExpressCompanyField = "快递名称"
+	ExpressOrderIDField = "快递.*号"
 
 	mutex     sync.Mutex
 	tableData TableStruct
@@ -99,6 +100,24 @@ func SliceEqual(s1, s2 []string) bool {
 		}
 	}
 	return true
+}
+
+func FieldEqual(header []string, r []string, row []string, field string) bool {
+	var matchIdx int
+
+	matchIdx = -1
+	for i := range header {
+		m, err := regexp.MatchString(field, header[i])
+		if err == nil && m {
+			matchIdx = i
+			break
+		}
+	}
+	if matchIdx == -1 {
+		return false
+	}
+
+	return len(r) > matchIdx && len(row) > matchIdx && r[matchIdx] == row[matchIdx]
 }
 
 func IndexHandler(writer http.ResponseWriter, req *http.Request) {
@@ -335,6 +354,18 @@ func DeleteHandler(writer http.ResponseWriter, req *http.Request) {
 	TableStruct2File(tableData, dataFileName) // ignore error
 }
 
+func ExportHandler(writer http.ResponseWriter, req *http.Request) {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	// transfer the result to excel file to return to front end
+	xlsxFile := TableStruct2Excel(tableData)
+
+	writer.Header().Set("Content-Type", "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	writer.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", "导出数据"+time.Now().Format("20060102150405")+".xlsx"))
+	Excel2Writer(xlsxFile, writer)
+}
+
 func handleMatch(writer http.ResponseWriter, req *http.Request, data []byte, express string) {
 	mutex.Lock()
 	tmpData := tableData
@@ -531,7 +562,8 @@ func handleImport(writer http.ResponseWriter, req *http.Request, data []byte) {
 		for _, row := range td.Datas {
 			isDiff := true
 			for _, r := range tableData.Datas {
-				if SliceEqual(r, row) {
+				// 快递单号相同也不合并
+				if SliceEqual(r, row) || FieldEqual(tableData.Headers, r, row, ExpressOrderIDField) {
 					isDiff = false
 					break
 				}
@@ -590,6 +622,7 @@ func main() {
 	mux.HandleFunc("/api/match/", MatchHandler)
 	mux.HandleFunc("/api/clear/", ClearHandler)
 	mux.HandleFunc("/api/delete", DeleteHandler)
+	mux.HandleFunc("/api/export/", ExportHandler)
 
 	http.HandleFunc("/api/", mux.ServeHTTP)
 	http.HandleFunc("/index.html", IndexHandler)
