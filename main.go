@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"html/template"
@@ -11,7 +12,6 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,6 +47,20 @@ const (
 	port         = 18888
 	dataFileName = "data.xlsx"
 )
+
+func compID(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	content := ""
+	prefix := ""
+	for _, str := range strs {
+		content += prefix
+		content += str
+		prefix = "|"
+	}
+	return fmt.Sprintf("%x", md5.Sum([]byte(content)))
+}
 
 func getExpressCompany(td TableStruct) []string {
 	m := make(map[string]bool)
@@ -137,7 +151,10 @@ func IndexHandler(writer http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	t, err := template.New(path).Funcs(template.FuncMap{"getExpressCompany": getExpressCompany}).ParseFiles(path)
+	t, err := template.New(path).
+		Funcs(template.FuncMap{"getExpressCompany": getExpressCompany}).
+		Funcs(template.FuncMap{"compID": compID}).
+		ParseFiles(path)
 	if err != nil {
 		writer.Write([]byte(err.Error()))
 		return
@@ -160,6 +177,8 @@ func IndexHandler(writer http.ResponseWriter, req *http.Request) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	res := tableData
+	res.Datas = make([][]string, len(res.Datas))
+	copy(res.Datas, tableData.Datas)
 	if keyword != "" {
 		for i := 0; i < len(res.Datas); {
 			matched := false
@@ -327,29 +346,19 @@ func DeleteHandler(writer http.ResponseWriter, req *http.Request) {
 	}()
 
 	req.ParseForm()
-	idStrArr := req.Form["id"]
-
-	var ids []int
-	for _, ele := range idStrArr {
-		id, err := strconv.ParseInt(ele, 10, 64)
-		if err != nil {
-			fmt.Printf("strconv int failed. err:%v, ele:%v\n", err, ele)
-			return
-		}
-		ids = append(ids, int(id))
-	}
-
-	sort.Ints(ids)
+	ids := req.Form["id"]
 
 	mutex.Lock()
 	defer mutex.Unlock()
 
-	for i := len(ids) - 1; i >= 0; i-- {
+	for i := 0; i < len(ids); i++ {
 		id := ids[i]
-		if id >= len(tableData.Datas) {
-			continue
+		for j := 0; j < len(tableData.Datas); j++ {
+			if compID(tableData.Datas[j]) == id {
+				tableData.Datas = append(tableData.Datas[:j], tableData.Datas[j+1:]...)
+				break
+			}
 		}
-		tableData.Datas = append(tableData.Datas[:id], tableData.Datas[id+1:]...)
 	}
 
 	TableStruct2File(tableData, dataFileName) // ignore error

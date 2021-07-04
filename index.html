@@ -117,13 +117,13 @@
                                                 {{range $index, $data := .Datas}}
                                                     <tr>
                                                         <td>
-                                                            <input type="checkbox" name="id" value="{{$index}}">
+                                                            <input type="checkbox" name="id" value="{{compID $data}}">
                                                             {{$index}}
                                                         </td>
                                                         {{range $index2, $cell := $data}}
                                                             <td>{{$cell}}</td> {{end}}
                                                         <td>
-                                                            <a href="/api/delete?id={{$index}}">删除</a>
+                                                            <a href="/api/delete?id={{compID $data}}">删除</a>
                                                         </td>
                                                 </tr>
                                                 {{end}}
